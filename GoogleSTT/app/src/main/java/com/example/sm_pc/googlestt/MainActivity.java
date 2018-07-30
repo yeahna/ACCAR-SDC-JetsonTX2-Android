@@ -1,10 +1,12 @@
 package com.example.sm_pc.googlestt;
 
 import android.Manifest;
+import android.app.Service;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.os.Handler;
 import android.os.Message;
+import android.os.Messenger;
 import android.speech.RecognitionListener;
 import android.speech.RecognizerIntent;
 import android.speech.SpeechRecognizer;
@@ -23,27 +25,27 @@ import java.net.UnknownHostException;
 import java.util.ArrayList;
 
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends AppCompatActivity implements Button.OnClickListener {
     private TextView textView;
     private Button recogBtn, playBtn, stopBtn;
-
     private Socket socket;
     private PrintWriter socketWriter;
-
     private String data;
     private Intent intent;
     private SpeechRecognizer mRecognizer;
     private final int MY_PERMISSIONS_RECORD_AUDIO = 1;
+    private final int END=1, READY = 2; //핸들러 메시지. 음성인식 준비, 끝, 앱 종료
 
-    private final int END=1, FINISH = 2; //핸들러 메시지. 음성인식 준비, 끝, 앱 종료
+    Intent myService = new Intent(MainActivity.this, TestSound.class);
+
     private Handler mHandler = new Handler(){
         public void handleMessage(Message msg){
             switch (msg.what) {
                 case END:
-                    sendEmptyMessageDelayed(FINISH, 5000);                //인식 시간 5초로 설정. 5초 지나면 신경안씀.
+                    sendEmptyMessageDelayed(READY, 1000);                //인식 시간 5초로 설정. 5초 지나면 신경안씀.
                     break;
-                case FINISH:
-                    finish();
+                case READY:
+                    //finish();
                     break;
             }
         }
@@ -71,6 +73,10 @@ public class MainActivity extends AppCompatActivity {
         playBtn = (Button) findViewById(R.id.playBtn);
         stopBtn = (Button) findViewById(R.id.stopBtn);
 
+        recogBtn.setOnClickListener(this);
+        playBtn.setOnClickListener(this);
+        stopBtn.setOnClickListener(this);
+
         // set speech recognizer config
         if (ContextCompat.checkSelfPermission(this,
                 Manifest.permission.RECORD_AUDIO)
@@ -89,25 +95,35 @@ public class MainActivity extends AppCompatActivity {
         intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);              // 음성인식 intent생성
         intent.putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, getPackageName());  // 데이터 설정
         intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "ko-KR");                  // 음성인식 언어
-        //intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-US");                  // 음성인식 언어
-
         mRecognizer = SpeechRecognizer.createSpeechRecognizer(this);                    // 음성 인식 객체
         mRecognizer.setRecognitionListener(recognitionListener);
-        recogBtn.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                mRecognizer.startListening(intent);
-            }
-        });
+    }
 
+    @Override
+    public void onClick(View view) {
+        switch (view.getId()) {
+            case R.id.recogBtn:
+                mRecognizer.startListening(intent);
+                break;
+
+            case R.id.playBtn:
+                startService(myService);
+                playBtn.setText("player button is pressed.");
+                break;
+
+            case R.id.stopBtn:
+                stopService(myService);
+                stopBtn.setText("stop button is pressed.");
+                break;
+
+        }
     }
 
     class SendThread extends Thread{
         @Override
         public void run() {
             try {
-                socket = new Socket("192.168.43.1671", 8888); //이것을 내 포트로 바꾸면 된다 192.168.43.160
-
+                socket = new Socket("172.30.1.82", 8888); //이것을 내 포트로 바꾸면 된다
                 socketWriter = new PrintWriter(socket.getOutputStream(), true);
                 socketWriter.println(data);
                 socketWriter.flush();
@@ -126,6 +142,7 @@ public class MainActivity extends AppCompatActivity {
     private RecognitionListener recognitionListener = new RecognitionListener() {
         @Override
         public void onReadyForSpeech(Bundle bundle) {
+            mHandler.sendEmptyMessage(READY);
         }
 
         @Override
@@ -180,12 +197,4 @@ public class MainActivity extends AppCompatActivity {
         public void onEvent(int i, Bundle bundle) {
         }
     };
-
-    @Override
-    public void finish(){
-        if(mRecognizer!= null) mRecognizer.stopListening();						//음성인식 중지
-        mHandler.removeMessages(END);			//메시지 삭제
-        mHandler.removeMessages(FINISH);			//메시지 삭제
-        super.finish();
-    }
 }
