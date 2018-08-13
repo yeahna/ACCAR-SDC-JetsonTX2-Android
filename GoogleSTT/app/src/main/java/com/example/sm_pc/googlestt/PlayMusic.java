@@ -1,4 +1,5 @@
 package com.example.sm_pc.googlestt;
+
 import android.app.Service;
 import android.content.Intent;
 import android.media.MediaPlayer;
@@ -7,23 +8,18 @@ import android.os.IBinder;
 import android.util.Log;
 import android.widget.Toast;
 
-public class TestSound extends Service {
+public class PlayMusic extends Service {
     private static final String TAG = "TestSound";
-    MediaPlayer player;
-    public TestSound() { }
-
-    public void onCreate(Bundle savedInstance) {
-        super.onCreate();
-        player = MediaPlayer.create(this, R.raw.travel);
-        player.setLooping(true);
-        player.setVolume(100, 100);
-        Toast.makeText(this, "Service started...", Toast.LENGTH_SHORT).show();
-        Log.i(TAG, "onCreate() , service started...");
-    }
+    MediaPlayer mp;
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        player.start();
+        mp = MediaPlayer.create(this, R.raw.travel);
+        mp.setLooping(true);
+        mp.setVolume(100, 100);
+        Toast.makeText(this, "Service started...", Toast.LENGTH_SHORT).show();
+        Log.i(TAG, " service started...");
+        mp.start();
         return Service.START_STICKY;
     }
 
@@ -44,12 +40,13 @@ public class TestSound extends Service {
     public void onPause() {
         Log.i(TAG, "onPause()");
     }
+
     @Override
     public void onDestroy() {
-        player.stop();
-        player.release();
-        Toast.makeText(this, "Service stopped...", Toast.LENGTH_SHORT).show();
-        Log.i(TAG, "onCreate() , service stopped...");
+        super.onDestroy();
+        Log.i(TAG, "onDestroy()");
+        mp.stop();
+        mp.release(); // 자원 반납
     }
 
     @Override

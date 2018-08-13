@@ -16,15 +16,15 @@
         <activity android:name=".MainActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-
-        <service
-            android:name=".TestSound"
-            android:enabled="true">
+        <service android:name=".PlayMusic">
+            <intent-filter>
+                <action android:name="playmusic"/>
+            </intent-filter>
         </service>
+
     </application>
 
 </manifest>
