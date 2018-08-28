@@ -18,19 +18,16 @@ public class PlayMusic extends Service {
         mp.setLooping(true);
         mp.setVolume(100, 100);
         Toast.makeText(this, "Service started...", Toast.LENGTH_SHORT).show();
-        Log.i(TAG, " service started...");
         mp.start();
         return Service.START_STICKY;
     }
 
     @Override
     public IBinder onBind(Intent intent) {
-        Log.i(TAG, "onBind()" );
         return null;
     }
 
     public IBinder onUnBind(Intent intent) {
-        Log.i(TAG, "onUnBind()");
         return null;
     }
 
@@ -51,6 +48,6 @@ public class PlayMusic extends Service {
 
     @Override
     public void onLowMemory() {
-        Log.i(TAG, "onLowMemory()");
+        //Log.i(TAG, "onLowMemory()");
     }
 }

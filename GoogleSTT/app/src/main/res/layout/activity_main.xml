@@ -8,6 +8,27 @@
     android:orientation="vertical"
     tools:context=".MainActivity">
 
+    <TextView
+        android:id="@+id/textView"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:text="Hello World!" />
+
+    <TextView
+        android:id="@+id/weather_view01"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:text="Current Location is ... " />
+
+    <TextView
+        android:id="@+id/weather_view03"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:text=" " />
+
     <Button
         android:id="@+id/recogBtn"
         android:layout_width="fill_parent"
@@ -26,19 +47,5 @@
         android:layout_height="wrap_content"
         android:id="@+id/weather_btn"
         android:text="Weather"/>
-
-    <TextView
-        android:id="@+id/textView"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:gravity="center"
-        android:text="Hello World!" />
-
-    <TextView
-        android:id="@+id/weather_view"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:gravity="center"
-        android:text="Today's weather is ... " />
 
 </LinearLayout>
