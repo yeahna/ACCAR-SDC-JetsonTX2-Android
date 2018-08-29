@@ -1,13 +1,16 @@
 package com.example.sm_pc.googlestt;
 
 import android.Manifest;
+import android.annotation.TargetApi;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.os.Build;
 import android.os.Handler;
 import android.os.Message;
 import android.speech.RecognitionListener;
 import android.speech.RecognizerIntent;
 import android.speech.SpeechRecognizer;
+import android.speech.tts.TextToSpeech;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
@@ -16,6 +19,7 @@ import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import org.w3c.dom.Document;
 import org.w3c.dom.Node;
@@ -33,13 +37,18 @@ import java.net.Socket;
 import java.net.URL;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Locale;
+import java.util.StringTokenizer;
+
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
 
 public class MainActivity extends AppCompatActivity implements Button.OnClickListener {
-    TextView textView, weather_view01, weather_view03;
-    Button recogBtn, weatherBtn;
+    TextToSpeech tts;
+    TextView textView, weather_view01, weather_view02;
+    Button recogBtn;
     private Socket socket;
     PrintWriter socketWriter;
     private String data;
@@ -52,7 +61,7 @@ public class MainActivity extends AppCompatActivity implements Button.OnClickLis
     String hour = "";
     String sky = "";
     String temp = "";
-    //static JSONArray array = null;
+    String[] res;
 
     @Override
     protected void onStop() {
@@ -72,13 +81,10 @@ public class MainActivity extends AppCompatActivity implements Button.OnClickLis
         // get component
         textView = findViewById(R.id.textView);
         recogBtn = findViewById(R.id.recogBtn);
-        weatherBtn = findViewById(R.id.weather_btn);
 
         weather_view01 = findViewById(R.id.weather_view01);
-        weather_view03 = findViewById(R.id.weather_view03);
-
+        weather_view02 = findViewById(R.id.weather_view02);
         recogBtn.setOnClickListener(this);
-        weatherBtn.setOnClickListener(this);
 
         // set speech recognizer config
         if (ContextCompat.checkSelfPermission(this,
@@ -147,7 +153,7 @@ public class MainActivity extends AppCompatActivity implements Button.OnClickLis
                             if(childNode.getNodeName().equals("day")){
                                 int su = Integer.parseInt(childNode.getFirstChild().getNodeValue());
                                 switch(su){
-                                    case 0 : day = "금일"; break;
+                                    case 0 : day = "오늘"; break;
                                     case 1 : day = "내일"; break;
                                     case 2 : day = "모레"; break;
                                 }
@@ -161,13 +167,22 @@ public class MainActivity extends AppCompatActivity implements Button.OnClickLis
                             }
                         }
                     }//end 안쪽 for문
-                    result += day+" "+hour+"시 ("+sky+","+temp+"도)\n";
+                    result += day+" "+hour+"시 날씨는 "+sky+"이고, 기온은 "+temp+"도 입니다.\n";
                 }//end 바깥쪽 for문
             }
         }.start();
+
+        tts=new TextToSpeech(getApplicationContext(), new TextToSpeech.OnInitListener() {
+            @Override
+            public void onInit(int status) {
+                if(status != TextToSpeech.ERROR) {
+                    tts.setLanguage(Locale.KOREAN);
+                }
+            }
+        });
     }
 
-    private Handler mHandler = new Handler() {
+        private Handler mHandler = new Handler() {
         public void handleMessage(Message msg) {
             switch (msg.what) {
                 case END:
@@ -219,16 +234,6 @@ public class MainActivity extends AppCompatActivity implements Button.OnClickLis
                 case R.id.recogBtn:
                     mRecognizer.startListening(intent);
                     break;
-
-                case R.id.weather_btn:
-                    weatherBtn.setText("pressed");
-                    try {
-                        weather_view01.setText(result);
-                    } catch (Exception e) {
-                        weather_view01.setText("오류"+e.getMessage());
-                        e.printStackTrace();
-                    } //[출처] 기상청 날씨 파싱|작성자 Hanjoong
-                    break;
             }
         }
 
@@ -249,6 +254,30 @@ public class MainActivity extends AppCompatActivity implements Button.OnClickLis
                 }
             }
         }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+
+        if(tts !=null){
+            tts.stop();
+            tts.shutdown();
+        }
+    }
+
+    @SuppressWarnings("deprecation")
+    private void ttsUnder20(String text) {
+        HashMap<String, String> map = new HashMap<>();
+        map.put(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, "MessageId");
+        tts.speak(text, TextToSpeech.QUEUE_FLUSH, map);
+    }
+
+    @TargetApi(Build.VERSION_CODES.LOLLIPOP)
+    private void ttsGreater21(String text) {
+        String utteranceId=this.hashCode() + "";
+        tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, utteranceId);
+    }
+
 
     private RecognitionListener recognitionListener = new RecognitionListener() {
             @Override
@@ -297,6 +326,13 @@ public class MainActivity extends AppCompatActivity implements Button.OnClickLis
                     } else if(data.equals("weather")) {
                         try {
                             weather_view01.setText(result);
+                            //ttsGreater21();
+                            //http://stackoverflow.com/a/29777304
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                                ttsGreater21(result);
+                            } else {
+                                ttsUnder20(result);
+                            }
                         } catch (Exception e) {
                             weather_view01.setText("오류"+e.getMessage());
                             e.printStackTrace();
@@ -308,7 +344,7 @@ public class MainActivity extends AppCompatActivity implements Button.OnClickLis
                 }
             }
 
-            @Override
+        @Override
             public void onPartialResults(Bundle bundle) { }
 
             @Override

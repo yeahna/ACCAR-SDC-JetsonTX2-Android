@@ -20,14 +20,14 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:gravity="center"
-        android:text="Current Location is ... " />
+        android:text="Weather is ...  " />
 
     <TextView
-        android:id="@+id/weather_view03"
+        android:id="@+id/weather_view02"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:gravity="center"
-        android:text=" " />
+        android:text="Weather_view 02 is here" />
 
     <Button
         android:id="@+id/recogBtn"
@@ -35,11 +35,5 @@
         android:layout_height="wrap_content"
         android:text="recognizing start"
         android:visibility="visible" />
-
-    <Button
-        android:layout_width="fill_parent"
-        android:layout_height="wrap_content"
-        android:id="@+id/weather_btn"
-        android:text="Weather"/>
 
 </LinearLayout>
