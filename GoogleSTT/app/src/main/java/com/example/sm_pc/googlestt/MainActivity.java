@@ -1,12 +1,15 @@
 package com.example.sm_pc.googlestt;
 
 import android.Manifest;
-import android.annotation.TargetApi;
+import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
-import android.os.Build;
-import android.os.Handler;
-import android.os.Message;
+import android.location.Address;
+import android.location.Geocoder;
+import android.location.Location;
+import android.location.LocationListener;
+import android.location.LocationManager;
+import android.os.AsyncTask;
 import android.speech.RecognitionListener;
 import android.speech.RecognizerIntent;
 import android.speech.SpeechRecognizer;
@@ -18,54 +21,64 @@ import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
+import android.widget.EditText;
+import android.widget.ImageButton;
 import android.widget.TextView;
 import android.widget.Toast;
-
 import org.w3c.dom.Document;
+import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
-import org.xml.sax.SAXException;
-
-import java.io.BufferedReader;
-import java.io.ByteArrayInputStream;
+import org.xml.sax.InputSource;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.io.PrintWriter;
-import java.net.HttpURLConnection;
 import java.net.Socket;
 import java.net.URL;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
-import java.util.StringTokenizer;
-
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
-import javax.xml.parsers.ParserConfigurationException;
 
-public class MainActivity extends AppCompatActivity implements Button.OnClickListener {
-    TextToSpeech tts;
-    TextView textView, weather_view01, weather_view02;
-    Button recogBtn;
+public class MainActivity extends AppCompatActivity {
+
+    private EditText input;
+    private TextView textView;
+    TextView debug;
+    private Button recogBtn;
+
     private Socket socket;
-    PrintWriter socketWriter;
+    private PrintWriter socketWriter;
+
     private String data;
-    private Intent intent, intent2;
+    private Intent intent;
     private SpeechRecognizer mRecognizer;
-    final int MY_PERMISSIONS_RECORD_AUDIO = 1;
-    private final int END = 1, READY = 2; //핸들러 메시지. 음성인식 준비, 끝, 앱 종료
-    String result = "";
-    String day = "";
-    String hour = "";
-    String sky = "";
-    String temp = "";
-    String[] res;
+
+    private final int MY_PERMISSIONS_RECORD_AUDIO = 1;
+    public static int TO_GRID = 0;
+
+    /*위치*/
+    LocationManager lm;
+    double longitude = 0;   // 위도
+    double latitude = 0;    // 경도
+
+    /*날씨*/
+    Document doc = null;
+    String weather = null;
+    String temp = null;
+
+    /*음성*/
+    TextToSpeech tts;
+    String address;
+
+    /*노래*/
+    private Intent musicIntent;
 
     @Override
     protected void onStop() {
         super.onStop();
+
         try {
             socket.close();
         } catch (IOException e) {
@@ -79,100 +92,62 @@ public class MainActivity extends AppCompatActivity implements Button.OnClickLis
         setContentView(R.layout.activity_main);
 
         // get component
-        textView = findViewById(R.id.textView);
-        recogBtn = findViewById(R.id.recogBtn);
+        textView = (TextView) findViewById(R.id.textView);
+        recogBtn = (Button) findViewById(R.id.recogBtn);
 
-        weather_view01 = findViewById(R.id.weather_view01);
-        weather_view02 = findViewById(R.id.weather_view02);
-        recogBtn.setOnClickListener(this);
+        debug = (TextView) findViewById(R.id.debug);
+
+        //set location config
+        if (ActivityCompat.checkSelfPermission(this,
+                Manifest.permission.ACCESS_FINE_LOCATION)
+                != PackageManager.PERMISSION_GRANTED) {
+            if (ActivityCompat.checkSelfPermission(this,
+                    Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            } else {
+                ActivityCompat.requestPermissions(this,
+                        new String[]{Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION}, 1);
+            }
+        }
 
         // set speech recognizer config
         if (ContextCompat.checkSelfPermission(this,
                 Manifest.permission.RECORD_AUDIO)
                 != PackageManager.PERMISSION_GRANTED) {
 
-            if (!(ActivityCompat.shouldShowRequestPermissionRationale(this, Manifest.permission.RECORD_AUDIO))) {
-                ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.RECORD_AUDIO}, MY_PERMISSIONS_RECORD_AUDIO);
+            if (ActivityCompat.shouldShowRequestPermissionRationale(this,
+                    Manifest.permission.RECORD_AUDIO)) {
+
+            } else {
+                ActivityCompat.requestPermissions(this,
+                        new String[]{Manifest.permission.RECORD_AUDIO}, MY_PERMISSIONS_RECORD_AUDIO
+                );
             }
         }
 
         intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);              // 음성인식 intent생성
         intent.putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, getPackageName());  // 데이터 설정
-        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-US");                  // 음성인식 언어
+        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "ko-KR");                  // 음성인식 언어
+        //intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-US");                  // 음성인식 언어
+
+
+        /*노래*/
+        musicIntent = new Intent("playmusic");
+        musicIntent.setPackage(this.getPackageName());
+
         mRecognizer = SpeechRecognizer.createSpeechRecognizer(this);                    // 음성 인식 객체
         mRecognizer.setRecognitionListener(recognitionListener);
 
-        intent2 = new Intent("playmusic");
-        intent2.setPackage(this.getPackageName());
-
-        new Thread() {
-            public void run() {
-                String html = null;
-                try {
-                    html = loadKmaData();
-                } catch (Exception e) {
-                    System.out.println("loadKmaData() is not working");
-                    e.printStackTrace();
-                }
-                //DOM 파싱.
-                ByteArrayInputStream bai = new ByteArrayInputStream(html.getBytes());
-                DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
-                //dbf.setIgnoringElementContentWhitespace(true);//화이트스패이스 생략
-                DocumentBuilder builder = null;
-                try {
-                    builder = dbf.newDocumentBuilder();
-                } catch (ParserConfigurationException e) {
-                    e.printStackTrace();
-                }
-                Document parse = null;//DOM 파서
-                try {
-                    parse = builder.parse(bai);
-                } catch (SAXException e) {
-                    e.printStackTrace();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-                //태그 검색
-                NodeList datas = parse.getElementsByTagName("data");
-                //String result = "data태그 수 =" + datas.getLength()+"\n";
-                result = "";
-                //17개의 data태그를 순차로 접근
-                for (int idx = 0; idx < datas.getLength(); idx++) {
-                    //필요한 정보들을 담을 변수 생성
-                    Node node = datas.item(idx);//data 태그 추출
-                    int childLength = node.getChildNodes().getLength();
-                    //자식태그 목록 수정
-                    NodeList childNodes = node.getChildNodes();
-                    for (int childIdx = 0; childIdx < childLength; childIdx++) {
-                        Node childNode = childNodes.item(childIdx);
-                        int count = 0;
-                        if(childNode.getNodeType() == Node.ELEMENT_NODE){
-                            count ++;
-                            //태그인 경우만 처리
-                            //금일,내일,모레 구분(시간정보 포함)
-                            if(childNode.getNodeName().equals("day")){
-                                int su = Integer.parseInt(childNode.getFirstChild().getNodeValue());
-                                switch(su){
-                                    case 0 : day = "오늘"; break;
-                                    case 1 : day = "내일"; break;
-                                    case 2 : day = "모레"; break;
-                                }
-                            }else if(childNode.getNodeName().equals("hour")){
-                                hour = childNode.getFirstChild().getNodeValue();
-                                //하늘상태코드 분석
-                            }else if(childNode.getNodeName().equals("wfKor")){
-                                sky = childNode.getFirstChild().getNodeValue();
-                            }else if(childNode.getNodeName().equals("temp")){
-                                temp = childNode.getFirstChild().getNodeValue();
-                            }
-                        }
-                    }//end 안쪽 for문
-                    result += day+" "+hour+"시 날씨는 "+sky+"이고, 기온은 "+temp+"도 입니다.\n";
-                }//end 바깥쪽 for문
+        recogBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                mRecognizer.startListening(intent);
             }
-        }.start();
+        });
 
-        tts=new TextToSpeech(getApplicationContext(), new TextToSpeech.OnInitListener() {
+        /* 위치, 날씨 정보*/
+        setLocation();
+
+        tts = new TextToSpeech(this, new TextToSpeech.OnInitListener() {
             @Override
             public void onInit(int status) {
                 if(status != TextToSpeech.ERROR) {
@@ -180,175 +155,315 @@ public class MainActivity extends AppCompatActivity implements Button.OnClickLis
                 }
             }
         });
+
+       // Handler handler = new Handler(Looper.getMainLooper());
+        //출처: http://ecogeo.tistory.com/329 [아키텍트를 꿈꾸며 - 에코지오]
     }
 
-        private Handler mHandler = new Handler() {
-        public void handleMessage(Message msg) {
-            switch (msg.what) {
-                case END:
-                    sendEmptyMessageDelayed(READY, 1000);                //인식 시간 5초로 설정. 5초 지나면 신경안씀.
-                    break;
-                case READY:
-                    //finish();
-                    break;
+    class SendThread extends Thread{
+
+        @Override
+        public void run() {
+            try {
+                socket = new Socket("192.168.43.160", 8888); //이것을 내 포트로 바꾸면 된다 192.168.43.160
+                //socket = new Socket("192.168.11.237", 8888);
+
+                socketWriter = new PrintWriter(socket.getOutputStream(), true);
+                socketWriter.println(data);
+                socketWriter.flush();
+                socketWriter.close();
+
+                socket.close();
+
+            } catch (UnknownHostException e) {
+                e.printStackTrace();
+            } catch (IOException e) {
+                e.printStackTrace();
             }
         }
-    };
-
-    public String loadKmaData() throws Exception {
-        String page = "http://www.kma.go.kr/wid/queryDFS.jsp?gridx=61&gridy=125"; //일단 서초구 서초동
-        URL url = new URL(page);
-        HttpURLConnection urlConnection =(HttpURLConnection)url.openConnection();
-        if(urlConnection == null){
-            System.out.println("urlConnection is null");
-            return null;
-        }
-
-        urlConnection.setConnectTimeout(10000);//최대 10초 대기
-        urlConnection.setUseCaches(false);//매번 서버에서 읽어오기
-        StringBuilder sb = new StringBuilder();//고속 문자열 결합체
-
-        if(urlConnection.getResponseCode() == HttpURLConnection.HTTP_OK){
-            InputStream inputStream = urlConnection.getInputStream();
-            InputStreamReader isr = new InputStreamReader(inputStream);
-
-            //한줄씩 읽기
-            BufferedReader br = new BufferedReader(isr);
-            while(true){
-                String line = br.readLine();//웹페이지의 html 코드 읽어오기
-
-                if(line == null) {
-                    System.out.println("line is null");
-                    break;//스트림이 끝나면 null리턴
-                }
-                sb.append(line+"\n");
-            }//end while
-            br.close();
-        }//end if
-        return sb.toString();
-    } //[출처] 기상청 날씨 파싱|작성자 Hanjoong
-
-    @Override
-    public void onClick(View view) {
-            switch (view.getId()) {
-                case R.id.recogBtn:
-                    mRecognizer.startListening(intent);
-                    break;
-            }
-        }
-
-    class SendThread extends Thread {
-            @Override
-            public void run() {
-                try {
-                    socket = new Socket("192.168.11.237", 8888); //이것을 내 포트로 바꾸면 된다
-                    socketWriter = new PrintWriter(socket.getOutputStream(), true);
-                    socketWriter.println(data);
-                    socketWriter.flush();
-                    socketWriter.close();
-                    socket.close();
-                } catch (UnknownHostException e) {
-                    e.printStackTrace();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            }
-        }
-
-    @Override
-    protected void onDestroy() {
-        super.onDestroy();
-
-        if(tts !=null){
-            tts.stop();
-            tts.shutdown();
-        }
     }
-
-    @SuppressWarnings("deprecation")
-    private void ttsUnder20(String text) {
-        HashMap<String, String> map = new HashMap<>();
-        map.put(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, "MessageId");
-        tts.speak(text, TextToSpeech.QUEUE_FLUSH, map);
-    }
-
-    @TargetApi(Build.VERSION_CODES.LOLLIPOP)
-    private void ttsGreater21(String text) {
-        String utteranceId=this.hashCode() + "";
-        tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, utteranceId);
-    }
-
 
     private RecognitionListener recognitionListener = new RecognitionListener() {
-            @Override
-            public void onReadyForSpeech(Bundle bundle) {
-                mHandler.sendEmptyMessage(READY);
-            }
+        @Override
+        public void onReadyForSpeech(Bundle bundle) {
+        }
 
-            @Override
-            public void onBeginningOfSpeech() { }
+        @Override
+        public void onBeginningOfSpeech() {
+        }
 
-            @Override
-            public void onRmsChanged(float v) { }
+        @Override
+        public void onRmsChanged(float v) {
+        }
 
-            @Override
-            public void onBufferReceived(byte[] bytes) { }
+        @Override
+        public void onBufferReceived(byte[] bytes) {
+        }
 
-            @Override
-            public void onEndOfSpeech() {
-                mHandler.sendEmptyMessage(END);  //핸들러에 메시지 보냄
-            }
+        @Override
+        public void onEndOfSpeech() {
+        }
 
-            @Override
-            public void onError(int i) {
-                textView.setText("너무 늦게 말하면 오류가 뜹니다");
-            }
+        @Override
+        public void onError(int i) {
+            textView.setText("너무 늦게 말하면 오류가 뜹니다");
 
-            @Override
-            public void onResults(Bundle bundle) {
-                String key = SpeechRecognizer.RESULTS_RECOGNITION;
-                ArrayList<String> mResult = bundle.getStringArrayList(key);
+        }
 
-                assert mResult != null;
-                String[] rs = new String[mResult.size()];
-                mResult.toArray(rs);
+        @Override
+        public void onResults(Bundle bundle) {
+            String key = "";
+            key = SpeechRecognizer.RESULTS_RECOGNITION;
+            ArrayList<String> mResult = bundle.getStringArrayList(key);
 
-                data = rs[0];
+            String[] rs = new String[mResult.size()];
+            mResult.toArray(rs);
 
-                textView.setText(data);
+            data = rs[0];
 
-                // run sendSocket Thread
-                if (data != null) {
-                    if (data.equals("music")) {
-                        startService(intent2);
-                    } else if (data.equals("pause")) {
-                        stopService(intent2);
-                    } else if(data.equals("weather")) {
-                        try {
-                            weather_view01.setText(result);
-                            //ttsGreater21();
-                            //http://stackoverflow.com/a/29777304
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                                ttsGreater21(result);
-                            } else {
-                                ttsUnder20(result);
-                            }
-                        } catch (Exception e) {
-                            weather_view01.setText("오류"+e.getMessage());
-                            e.printStackTrace();
-                        } //[출처] 기상청 날씨 파싱|작성자 Hanjoong
-                    }
-                    Log.w("TEST", " " + data);
+            textView.setText(data);
+
+            // run sendSocket Thread
+            if(data != null) {
+                Log.w("TEST", " " + data);
+
+                if(data.equals("날씨")){
+                    GetXMLTask task = new GetXMLTask();
+                    String str = "http://www.kma.go.kr/wid/queryDFS.jsp?";
+                    LatXLngY tmp = convertGRID_GPS(TO_GRID, latitude, longitude);
+                    str += "gridx=" + (int)tmp.x + "&gridy=" + (int)tmp.y;
+                    Log.i("tmp", str);
+                    task.execute(str);
+
+                }else if(data.equals("음악")){
+                    startService(musicIntent);
+                }else if(data.equals("음악 그만")){
+                    stopService(musicIntent);
+                }
+                else {
                     SendThread thread = new SendThread();
                     thread.start();
                 }
             }
+        }
 
         @Override
-            public void onPartialResults(Bundle bundle) { }
+        public void onPartialResults(Bundle bundle) {
+        }
 
-            @Override
-            public void onEvent(int i, Bundle bundle) { }
-        };
+        @Override
+        public void onEvent(int i, Bundle bundle) {
+        }
+    };
 
+
+    private void setLocation(){
+        // 현재 위도, 경도 알아내기
+        lm = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
+
+        try{
+            debug.setText("수신중..");
+            // GPS 제공자의 정보가 바뀌면 콜백하도록 리스너 등록하기~!!!
+            lm.requestLocationUpdates(LocationManager.GPS_PROVIDER, // 등록할 위치제공자
+                    100, // 통지사이의 최소 시간간격 (miliSecond)
+                    1, // 통지사이의 최소 변경거리 (m)
+                    mLocationListener);
+            lm.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, // 등록할 위치제공자
+                    100, // 통지사이의 최소 시간간격 (miliSecond)
+                    1, // 통지사이의 최소 변경거리 (m)
+                    mLocationListener);
+        }catch(SecurityException ex){ }
+    }
+
+    private void speechWeather(){
+        String str = "현재" + address + "의 온도는 " + temp + "도 날씨는 " + weather + "입니다"; //hour의 테그만 받아서 오면 될듯
+        tts.setPitch((float)0.1);
+        tts.setSpeechRate((float)1.0);
+        tts.speak(str, TextToSpeech.QUEUE_FLUSH, null);
+    }
+
+    private class GetXMLTask extends AsyncTask<String, Void, Document> {
+
+        @Override
+        protected Document doInBackground(String... urls) {
+            URL url;
+            try {
+                url = new URL(urls[0]);
+                DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
+                DocumentBuilder db = dbf.newDocumentBuilder(); //XML문서 빌더 객체를 생성
+                doc = db.parse(new InputSource(url.openStream())); //XML문서를 파싱한다.
+                doc.getDocumentElement().normalize();
+
+            } catch (Exception e) {
+                Toast.makeText(getBaseContext(), "Parsing Error", Toast.LENGTH_SHORT).show();
+            }
+            return doc;
+        }
+
+        @Override
+        protected void onPostExecute(Document doc) {
+
+            //data태그가 있는 노드를 찾아서 리스트 형태로 만들어서 반환
+            NodeList nodeList = doc.getElementsByTagName("data");
+            //data 태그를 가지는 노드를 찾음, 계층적인 노드 구조를 반환
+
+            Node node = nodeList.item(0);
+            Element fstElmnt = (Element) node;
+            NodeList nameList  = fstElmnt.getElementsByTagName("temp");
+            Element nameElement = (Element) nameList.item(0);
+            nameList = nameElement.getChildNodes();
+            temp = ((Node) nameList.item(0)).getNodeValue();
+
+
+            NodeList websiteList = fstElmnt.getElementsByTagName("wfKor");
+            //<wfKor>맑음</wfKor> =====> <wfKor> 태그의 첫번째 자식노드는 TextNode 이고 TextNode의 값은 맑음
+            weather = websiteList.item(0).getChildNodes().item(0).getNodeValue();
+
+
+            /* 날씨 TTS */
+            debug.setText(temp + "," +  weather);
+            speechWeather();
+
+            super.onPostExecute(doc);
+        }
+    }//end inner class - GetXMLTask
+
+    private final LocationListener mLocationListener = new LocationListener() {
+        public void onLocationChanged(Location location) {
+            //여기서 위치값이 갱신되면 이벤트가 발생한다.
+            //값은 Location 형태로 리턴되며 좌표 출력 방법은 다음과 같다.
+
+            Log.d("test", "onLocationChanged, location:" + location);
+
+            longitude = location.getLongitude(); //경도
+            latitude = location.getLatitude();   //위도
+
+            debug.setText("위도 : " + longitude + "\n경도 : " + latitude);
+
+            address = getAddress(getApplicationContext(), latitude, longitude);
+            Log.i("tmp", address);
+        }
+        public void onProviderDisabled(String provider) {
+            // Disabled시
+            Log.d("test", "onProviderDisabled, provider:" + provider);
+        }
+
+        public void onProviderEnabled(String provider) {
+            // Enabled시
+            Log.d("test", "onProviderEnabled, provider:" + provider);
+        }
+
+        public void onStatusChanged(String provider, int status, Bundle extras) {
+            // 변경시
+            Log.d("test", "onStatusChanged, provider:" + provider + ", status:" + status + " ,Bundle:" + extras);
+        }
+    };
+
+    public static String getAddress(Context mContext,double lat, double lng) {
+        String nowAddress ="현재 위치를 확인 할 수 없습니다.";
+        Geocoder geocoder = new Geocoder(mContext, Locale.KOREA);
+        List<Address> address;
+        try {
+            if (geocoder != null) {
+                //세번째 파라미터는 좌표에 대해 주소를 리턴 받는 갯수로
+                //한좌표에 대해 두개이상의 이름이 존재할수있기에 주소배열을 리턴받기 위해 최대갯수 설정
+                address = geocoder.getFromLocation(lat, lng, 1);
+
+                if (address != null && address.size() > 0) {
+                    // 주소 받아오기
+                    String currentLocationAddress = address.get(0).getAddressLine(0).toString();
+                    nowAddress  = currentLocationAddress;
+
+                }
+            }
+
+        } catch (IOException e) {
+            Log.i("error", "주소를 가져 올 수 없습니다.");
+            e.printStackTrace();
+        }
+        return nowAddress;
+    }
+
+    private LatXLngY convertGRID_GPS(int mode, double lat_X, double lng_Y ) {
+        double RE = 6371.00877; // 지구 반경(km)
+        double GRID = 5.0; // 격자 간격(km)
+        double SLAT1 = 30.0; // 투영 위도1(degree)
+        double SLAT2 = 60.0; // 투영 위도2(degree)
+        double OLON = 126.0; // 기준점 경도(degree)
+        double OLAT = 38.0; // 기준점 위도(degree)
+        double XO = 43; // 기준점 X좌표(GRID)
+        double YO = 136; // 기1준점 Y좌표(GRID)
+
+        //
+        // LCC DFS 좌표변환 ( code : "TO_GRID"(위경도->좌표, lat_X:위도,  lng_Y:경도), "TO_GPS"(좌표->위경도,  lat_X:x, lng_Y:y) )
+        //
+
+        double DEGRAD = Math.PI / 180.0;
+        double RADDEG = 180.0 / Math.PI;
+
+        double re = RE / GRID;
+        double slat1 = SLAT1 * DEGRAD;
+        double slat2 = SLAT2 * DEGRAD;
+        double olon = OLON * DEGRAD;
+        double olat = OLAT * DEGRAD;
+
+        double sn = Math.tan(Math.PI * 0.25 + slat2 * 0.5) / Math.tan(Math.PI * 0.25 + slat1 * 0.5);
+        sn = Math.log(Math.cos(slat1) / Math.cos(slat2)) / Math.log(sn);
+        double sf = Math.tan(Math.PI * 0.25 + slat1 * 0.5);
+        sf = Math.pow(sf, sn) * Math.cos(slat1) / sn;
+        double ro = Math.tan(Math.PI * 0.25 + olat * 0.5);
+        ro = re * sf / Math.pow(ro, sn);
+        LatXLngY rs = new LatXLngY();
+
+        if (mode == TO_GRID) {
+            rs.lat = lat_X;
+            rs.lng = lng_Y;
+            double ra = Math.tan(Math.PI * 0.25 + (lat_X) * DEGRAD * 0.5);
+            ra = re * sf / Math.pow(ra, sn);
+            double theta = lng_Y * DEGRAD - olon;
+            if (theta > Math.PI) theta -= 2.0 * Math.PI;
+            if (theta < -Math.PI) theta += 2.0 * Math.PI;
+            theta *= sn;
+            rs.x = Math.floor(ra * Math.sin(theta) + XO + 0.5);
+            rs.y = Math.floor(ro - ra * Math.cos(theta) + YO + 0.5);
+        }
+        else {
+            rs.x = lat_X;
+            rs.y = lng_Y;
+            double xn = lat_X - XO;
+            double yn = ro - lng_Y + YO;
+            double ra = Math.sqrt(xn * xn + yn * yn);
+            if (sn < 0.0) {
+                ra = -ra;
+            }
+            double alat = Math.pow((re * sf / ra), (1.0 / sn));
+            alat = 2.0 * Math.atan(alat) - Math.PI * 0.5;
+
+            double theta = 0.0;
+            if (Math.abs(xn) <= 0.0) {
+                theta = 0.0;
+            }
+            else {
+                if (Math.abs(yn) <= 0.0) {
+                    theta = Math.PI * 0.5;
+                    if (xn < 0.0) {
+                        theta = -theta;
+                    }
+                }
+                else theta = Math.atan2(xn, yn);
+            }
+            double alon = theta / sn + olon;
+            rs.lat = alat * RADDEG;
+            rs.lng = alon * RADDEG;
+        }
+        return rs;
+    }
+
+    class LatXLngY {
+        public double lat;
+        public double lng;
+        public double x;
+        public double y;
+
+    }
 }

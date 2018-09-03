@@ -11,28 +11,24 @@
     <TextView
         android:id="@+id/textView"
         android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
+        android:layout_height="100dp"
+        android:layout_margin="30dp"
         android:gravity="center"
-        android:text="Hello World!" />
+        android:text="명령어: " />
 
     <TextView
-        android:id="@+id/weather_view01"
+        android:id="@+id/debug"
         android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
+        android:layout_height="100dp"
+        android:layout_margin="30dp"
         android:gravity="center"
-        android:text="Weather is ...  " />
-
-    <TextView
-        android:id="@+id/weather_view02"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:gravity="center"
-        android:text="Weather_view 02 is here" />
+        android:text="for debug" />
 
     <Button
         android:id="@+id/recogBtn"
+        android:layout_margin="10dp"
         android:layout_width="fill_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="80dp"
         android:text="recognizing start"
         android:visibility="visible" />
 
