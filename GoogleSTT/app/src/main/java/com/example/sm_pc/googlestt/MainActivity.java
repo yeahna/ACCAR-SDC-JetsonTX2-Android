@@ -155,7 +155,7 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
-    class SendThread extends Thread{ //socket통신의 hread 문제 해결
+    class SendThread extends Thread{ // socket 통신의 thread 문제 해결
 
         @Override
         public void run() {
@@ -269,7 +269,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void speechWeather(){
-        String str = "현재" + address + "의 " + hour + "시 날씨는 " + "온도는 " + temp + "도 날씨는 " + weather + "입니다"; // hour의 태그만 받아서 오면 시간까지 출력 가능
+        String str = "현재" + address + "의 " + hour + "시 온도는 " + temp + "도 날씨는 " + weather + "입니다"; // hour의 태그만 받아서 오면 시간까지 출력 가능
         tts.setPitch((float)0.1);
         tts.setSpeechRate((float)1.0);
         tts.speak(str, TextToSpeech.QUEUE_FLUSH, null);
