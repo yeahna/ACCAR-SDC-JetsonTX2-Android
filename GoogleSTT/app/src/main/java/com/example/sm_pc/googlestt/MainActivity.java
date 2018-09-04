@@ -21,8 +21,6 @@ import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
-import android.widget.EditText;
-import android.widget.ImageButton;
 import android.widget.TextView;
 import android.widget.Toast;
 import org.w3c.dom.Document;
@@ -43,7 +41,6 @@ import javax.xml.parsers.DocumentBuilderFactory;
 
 public class MainActivity extends AppCompatActivity {
 
-    private EditText input;
     private TextView textView;
     TextView debug;
     private Button recogBtn;
@@ -67,6 +64,7 @@ public class MainActivity extends AppCompatActivity {
     Document doc = null;
     String weather = null;
     String temp = null;
+    String hour = null;
 
     /*음성*/
     TextToSpeech tts;
@@ -76,7 +74,7 @@ public class MainActivity extends AppCompatActivity {
     private Intent musicIntent;
 
     @Override
-    protected void onStop() {
+    protected void onStop() { //socket 통신 종료 함수
         super.onStop();
 
         try {
@@ -149,18 +147,15 @@ public class MainActivity extends AppCompatActivity {
 
         tts = new TextToSpeech(this, new TextToSpeech.OnInitListener() {
             @Override
-            public void onInit(int status) {
+            public void onInit(int status) { //Google TTS 언어 설정
                 if(status != TextToSpeech.ERROR) {
                     tts.setLanguage(Locale.KOREAN);
                 }
             }
         });
-
-       // Handler handler = new Handler(Looper.getMainLooper());
-        //출처: http://ecogeo.tistory.com/329 [아키텍트를 꿈꾸며 - 에코지오]
     }
 
-    class SendThread extends Thread{
+    class SendThread extends Thread{ //socket통신의 hread 문제 해결
 
         @Override
         public void run() {
@@ -183,7 +178,7 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private RecognitionListener recognitionListener = new RecognitionListener() {
+    private RecognitionListener recognitionListener = new RecognitionListener() { //음성 인식 함수
         @Override
         public void onReadyForSpeech(Bundle bundle) {
         }
@@ -221,7 +216,7 @@ public class MainActivity extends AppCompatActivity {
 
             data = rs[0];
 
-            textView.setText(data);
+            textView.setText(data); //인식한 명령어 출력
 
             // run sendSocket Thread
             if(data != null) {
@@ -257,13 +252,11 @@ public class MainActivity extends AppCompatActivity {
     };
 
 
-    private void setLocation(){
-        // 현재 위도, 경도 알아내기
+    private void setLocation(){     // 현재 위도, 경도 알아내기
         lm = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
 
         try{
-            debug.setText("수신중..");
-            // GPS 제공자의 정보가 바뀌면 콜백하도록 리스너 등록하기~!!!
+            debug.setText("수신중..");     // GPS 제공자의 정보가 바뀌면 콜백하도록 리스너 등록하기~!!!
             lm.requestLocationUpdates(LocationManager.GPS_PROVIDER, // 등록할 위치제공자
                     100, // 통지사이의 최소 시간간격 (miliSecond)
                     1, // 통지사이의 최소 변경거리 (m)
@@ -276,7 +269,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void speechWeather(){
-        String str = "현재" + address + "의 온도는 " + temp + "도 날씨는 " + weather + "입니다"; //hour의 테그만 받아서 오면 될듯
+        String str = "현재" + address + "의 " + hour + "시 날씨는 " + "온도는 " + temp + "도 날씨는 " + weather + "입니다"; // hour의 태그만 받아서 오면 시간까지 출력 가능
         tts.setPitch((float)0.1);
         tts.setSpeechRate((float)1.0);
         tts.speak(str, TextToSpeech.QUEUE_FLUSH, null);
@@ -319,11 +312,12 @@ public class MainActivity extends AppCompatActivity {
             //<wfKor>맑음</wfKor> =====> <wfKor> 태그의 첫번째 자식노드는 TextNode 이고 TextNode의 값은 맑음
             weather = websiteList.item(0).getChildNodes().item(0).getNodeValue();
 
+            NodeList hrList = fstElmnt.getElementsByTagName("hour");    //<hour>24</hour>
+            hour = hrList.item(0).getChildNodes().item(0).getNodeValue();
 
             /* 날씨 TTS */
-            debug.setText(temp + "," +  weather);
+            debug.setText(hour + "," + temp + "," + weather);
             speechWeather();
-
             super.onPostExecute(doc);
         }
     }//end inner class - GetXMLTask
@@ -376,7 +370,6 @@ public class MainActivity extends AppCompatActivity {
 
                 }
             }
-
         } catch (IOException e) {
             Log.i("error", "주소를 가져 올 수 없습니다.");
             e.printStackTrace();
@@ -464,6 +457,5 @@ public class MainActivity extends AppCompatActivity {
         public double lng;
         public double x;
         public double y;
-
     }
 }
