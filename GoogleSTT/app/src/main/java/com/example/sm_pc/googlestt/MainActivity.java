@@ -230,9 +230,9 @@ public class MainActivity extends AppCompatActivity {
                     Log.i("tmp", str);
                     task.execute(str);
 
-                }else if(data.equals("음악")){
+                }else if(data.equals("음악 재생")){
                     startService(musicIntent);
-                }else if(data.equals("음악 그만")){
+                }else if(data.equals("음악 정지")){
                     stopService(musicIntent);
                 }
                 else {
